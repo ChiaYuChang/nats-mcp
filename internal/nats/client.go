@@ -34,10 +34,13 @@ func NewClient() (*Client, error) {
 		}),
 	}
 
-	// Support for credentials file if provided
+	// Support for credentials file or token if provided
 	creds := os.Getenv("NATS_CREDS")
+	token := os.Getenv("NATS_TOKEN")
 	if creds != "" {
 		opts = append(opts, nats.UserCredentials(creds))
+	} else if token != "" {
+		opts = append(opts, nats.Token(token))
 	} else {
 		// Fallback to username and password
 		user := os.Getenv("NATS_USER")
