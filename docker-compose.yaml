@@ -4,5 +4,5 @@ services:
     ports:
       - "14222:4222" # Client (Host 14222 -> Container 4222)
       - "18222:8222" # HTTP Monitoring (Host 18222 -> Container 8222)
-    command: "-js --auth test-token" # Enable JetStream and Token Auth
+    command: "-js" # Enable JetStream and Token Auth
     container_name: nats-mcp-dev

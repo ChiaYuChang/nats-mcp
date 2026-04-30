@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-mcp/nats-mcp/internal/nats"
 	"github.com/nats-mcp/nats-mcp/internal/testutil"
 )
@@ -40,8 +41,10 @@ func TestJetStreamHandlers(t *testing.T) {
 			Params: mcp.CallToolParams{
 				Name: "jetstream_create_stream",
 				Arguments: map[string]interface{}{
-					"name":     streamName,
-					"subjects": "test.js.>",
+					"name":      streamName,
+					"subjects":  "test.js.>",
+					"storage":   "memory",
+					"retention": "limits",
 				},
 			},
 		}
@@ -67,6 +70,41 @@ func TestJetStreamHandlers(t *testing.T) {
 		text := resp.Content[0].(mcp.TextContent).Text
 		if !strings.Contains(text, streamName) {
 			t.Errorf("Expected stream %s in list, got: %s", streamName, text)
+		}
+	})
+
+	t.Run("jetstream_list_consumers", func(t *testing.T) {
+		// Create a consumer first
+		stream, err := client.JS.Stream(ctx, streamName)
+		if err != nil {
+			t.Fatalf("Failed to get stream: %v", err)
+		}
+		_, err = stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+			Durable: "TEST_CONSUMER",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create consumer: %v", err)
+		}
+
+		handler := jetstreamListConsumersHandler(client)
+		req := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: "jetstream_list_consumers",
+				Arguments: map[string]interface{}{
+					"stream": streamName,
+				},
+			},
+		}
+		resp, err := handler(ctx, req)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if resp.IsError {
+			t.Errorf("Expected success, got error: %v", resp.Content)
+		}
+		text := resp.Content[0].(mcp.TextContent).Text
+		if !strings.Contains(text, "TEST_CONSUMER") {
+			t.Errorf("Expected consumer 'TEST_CONSUMER' in list, got: %s", text)
 		}
 	})
 

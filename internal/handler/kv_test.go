@@ -40,7 +40,8 @@ func TestKVHandlers(t *testing.T) {
 			Params: mcp.CallToolParams{
 				Name: "kv_create_bucket",
 				Arguments: map[string]interface{}{
-					"bucket": bucketName,
+					"bucket":      bucketName,
+					"ttl_seconds": 60.0,
 				},
 			},
 		}
@@ -71,6 +72,29 @@ func TestKVHandlers(t *testing.T) {
 		}
 		if resp.IsError {
 			t.Errorf("Expected success, got error: %v", resp.Content)
+		}
+	})
+
+	t.Run("kv_list_keys", func(t *testing.T) {
+		handler := kvListKeysHandler(client)
+		req := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: "kv_list_keys",
+				Arguments: map[string]interface{}{
+					"bucket": bucketName,
+				},
+			},
+		}
+		resp, err := handler(ctx, req)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if resp.IsError {
+			t.Errorf("Expected success, got error: %v", resp.Content)
+		}
+		text := resp.Content[0].(mcp.TextContent).Text
+		if !strings.Contains(text, "test_key") {
+			t.Errorf("Expected key 'test_key' in list, got: %s", text)
 		}
 	})
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -16,6 +17,11 @@ func RegisterKVTools(s *mcpserver.MCPServer, natsClient *nats.Client) {
 	s.AddTool(mcp.NewTool("kv_list_buckets",
 		mcp.WithDescription("List all Key-Value buckets"),
 	), kvListBucketsHandler(natsClient))
+
+	s.AddTool(mcp.NewTool("kv_list_keys",
+		mcp.WithDescription("List all keys in a Key-Value bucket"),
+		mcp.WithString("bucket", mcp.Required(), mcp.Description("The name of the KV bucket")),
+	), kvListKeysHandler(natsClient))
 
 	s.AddTool(mcp.NewTool("kv_get",
 		mcp.WithDescription("Get a value from a Key-Value bucket"),
@@ -33,6 +39,7 @@ func RegisterKVTools(s *mcpserver.MCPServer, natsClient *nats.Client) {
 	s.AddTool(mcp.NewTool("kv_create_bucket",
 		mcp.WithDescription("Create a new Key-Value bucket"),
 		mcp.WithString("bucket", mcp.Required(), mcp.Description("The name of the bucket to create")),
+		mcp.WithNumber("ttl_seconds", mcp.Description("Time-To-Live for keys in seconds (0 for no limit)")),
 	), kvCreateBucketHandler(natsClient))
 
 	s.AddTool(mcp.NewTool("kv_delete_key",
@@ -61,6 +68,39 @@ func kvListBucketsHandler(natsClient *nats.Client) mcpserver.ToolHandlerFunc {
 
 		if count == 0 {
 			return mcp.NewToolResultText("No Key-Value buckets found."), nil
+		}
+
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+}
+
+func kvListKeysHandler(natsClient *nats.Client) mcpserver.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		bucketName, _ := request.RequireString("bucket")
+
+		kv, err := natsClient.JS.KeyValue(ctx, bucketName)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to bind to bucket %s: %v", bucketName, err)), nil
+		}
+
+		keys, err := kv.ListKeys(ctx)
+		if err != nil {
+			if strings.Contains(err.Error(), "no keys found") || strings.Contains(err.Error(), "not found") {
+				return mcp.NewToolResultText(fmt.Sprintf("No keys found in bucket %s.", bucketName)), nil
+			}
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to list keys in bucket %s: %v", bucketName, err)), nil
+		}
+
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "Keys in bucket %s:\n", bucketName)
+		count := 0
+		for key := range keys.Keys() {
+			fmt.Fprintf(&sb, "- %s\n", key)
+			count++
+		}
+
+		if count == 0 {
+			return mcp.NewToolResultText(fmt.Sprintf("No keys found in bucket %s.", bucketName)), nil
 		}
 
 		return mcp.NewToolResultText(sb.String()), nil
@@ -110,15 +150,21 @@ func kvPutHandler(natsClient *nats.Client) mcpserver.ToolHandlerFunc {
 func kvCreateBucketHandler(natsClient *nats.Client) mcpserver.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		bucketName, _ := request.RequireString("bucket")
+		ttlSeconds := request.GetFloat("ttl_seconds", 0)
 
-		_, err := natsClient.JS.CreateKeyValue(ctx, jetstream.KeyValueConfig{
+		config := jetstream.KeyValueConfig{
 			Bucket: bucketName,
-		})
+		}
+		if ttlSeconds > 0 {
+			config.TTL = time.Duration(ttlSeconds) * time.Second
+		}
+
+		_, err := natsClient.JS.CreateKeyValue(ctx, config)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to create bucket %s: %v", bucketName, err)), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully created Key-Value bucket: %s", bucketName)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully created Key-Value bucket: %s (TTL: %v)", bucketName, config.TTL)), nil
 	}
 }
 

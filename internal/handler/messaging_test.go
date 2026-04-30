@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	natsgo "github.com/nats-io/nats.go"
@@ -49,12 +50,20 @@ func TestMessagingHandlers(t *testing.T) {
 		subject := "test.messaging"
 		payload := "hello world"
 
-		// Start a subscription in a separate goroutine or use the sync tool
-		// For simplicity, we use the nats_subscribe_sync handler
 		subHandler := natsSubscribeSyncHandler(client)
 		pubHandler := natsPublishHandler(client)
 
-		// Publish message
+		subReq := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: "nats_subscribe_sync",
+				Arguments: map[string]interface{}{
+					"subject":    subject,
+					"count":      1.0,
+					"timeout_ms": 3000.0,
+				},
+			},
+		}
+
 		pubReq := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
 				Name: "nats_publish",
@@ -65,33 +74,35 @@ func TestMessagingHandlers(t *testing.T) {
 			},
 		}
 
-		// We need to subscribe first then publish.
-		// Since subHandler is synchronous and blocking, we'd need to run it in a goroutine.
-		// Alternatively, we can just test them independently or use a small delay.
+		type result struct {
+			resp *mcp.CallToolResult
+			err  error
+		}
+		resChan := make(chan result)
 
+		// Start subscription in background
 		go func() {
-			_, _ = pubHandler(ctx, pubReq)
+			r, e := subHandler(ctx, subReq)
+			resChan <- result{r, e}
 		}()
 
-		subReq := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name: "nats_subscribe_sync",
-				Arguments: map[string]interface{}{
-					"subject":    subject,
-					"count":      1.0,
-					"timeout_ms": 2000.0,
-				},
-			},
+		// Give it a moment to subscribe
+		time.Sleep(500 * time.Millisecond)
+
+		// Publish message
+		_, err = pubHandler(ctx, pubReq)
+		if err != nil {
+			t.Fatalf("Publish failed: %v", err)
 		}
 
-		resp, err := subHandler(ctx, subReq)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
+		res := <-resChan
+		if res.err != nil {
+			t.Errorf("Unexpected error: %v", res.err)
 		}
-		if resp.IsError {
-			t.Errorf("Expected success, got error: %v", resp.Content)
+		if res.resp.IsError {
+			t.Errorf("Expected success, got error: %v", res.resp.Content)
 		}
-		text := resp.Content[0].(mcp.TextContent).Text
+		text := res.resp.Content[0].(mcp.TextContent).Text
 		if !strings.Contains(text, payload) {
 			t.Errorf("Expected payload '%s' in received message, got: %s", payload, text)
 		}

@@ -33,6 +33,8 @@ func RegisterJetStreamTools(s *mcpserver.MCPServer, natsClient *nats.Client) {
 		mcp.WithDescription("Create a new JetStream stream"),
 		mcp.WithString("name", mcp.Required(), mcp.Description("The name of the stream")),
 		mcp.WithString("subjects", mcp.Required(), mcp.Description("Comma-separated list of subjects (e.g., 'orders.*,events.>')")),
+		mcp.WithString("storage", mcp.Description("Storage type: 'file' or 'memory' (default 'file')")),
+		mcp.WithString("retention", mcp.Description("Retention policy: 'limits', 'interest', 'workqueue' (default 'limits')")),
 	), jetstreamCreateStreamHandler(natsClient))
 
 	s.AddTool(mcp.NewTool("jetstream_delete_stream",
@@ -44,6 +46,11 @@ func RegisterJetStreamTools(s *mcpserver.MCPServer, natsClient *nats.Client) {
 		mcp.WithDescription("Purge all messages from a JetStream stream"),
 		mcp.WithString("stream", mcp.Required(), mcp.Description("The name of the stream to purge")),
 	), jetstreamPurgeStreamHandler(natsClient))
+
+	s.AddTool(mcp.NewTool("jetstream_list_consumers",
+		mcp.WithDescription("List all consumers for a JetStream stream"),
+		mcp.WithString("stream", mcp.Required(), mcp.Description("The name of the stream")),
+	), jetstreamListConsumersHandler(natsClient))
 }
 
 func jetstreamListStreamsHandler(natsClient *nats.Client) mcpserver.ToolHandlerFunc {
@@ -159,15 +166,41 @@ func jetstreamCreateStreamHandler(natsClient *nats.Client) mcpserver.ToolHandler
 			subjects[i] = strings.TrimSpace(subjects[i])
 		}
 
-		_, err := natsClient.JS.CreateStream(ctx, jetstream.StreamConfig{
+		storageStr := request.GetString("storage", "file")
+		retentionStr := request.GetString("retention", "limits")
+
+		config := jetstream.StreamConfig{
 			Name:     name,
 			Subjects: subjects,
-		})
+		}
+
+		switch strings.ToLower(storageStr) {
+		case "memory":
+			config.Storage = jetstream.MemoryStorage
+		case "file":
+			config.Storage = jetstream.FileStorage
+		default:
+			config.Storage = jetstream.FileStorage
+		}
+
+		switch strings.ToLower(retentionStr) {
+		case "interest":
+			config.Retention = jetstream.InterestPolicy
+		case "workqueue":
+			config.Retention = jetstream.WorkQueuePolicy
+		case "limits":
+			config.Retention = jetstream.LimitsPolicy
+		default:
+			config.Retention = jetstream.LimitsPolicy
+		}
+
+		_, err := natsClient.JS.CreateStream(ctx, config)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to create stream %s: %v", name, err)), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully created stream: %s", name)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully created stream: %s (Storage: %s, Retention: %s)",
+			name, storageStr, retentionStr)), nil
 	}
 }
 
@@ -197,5 +230,32 @@ func jetstreamPurgeStreamHandler(natsClient *nats.Client) mcpserver.ToolHandlerF
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Successfully purged stream: %s", streamName)), nil
+	}
+}
+
+func jetstreamListConsumersHandler(natsClient *nats.Client) mcpserver.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		streamName, _ := request.RequireString("stream")
+
+		stream, err := natsClient.JS.Stream(ctx, streamName)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to get stream %s: %v", streamName, err)), nil
+		}
+
+		consumers := stream.ConsumerNames(ctx)
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "Consumers for stream %s:\n", streamName)
+
+		count := 0
+		for name := range consumers.Name() {
+			fmt.Fprintf(&sb, "- %s\n", name)
+			count++
+		}
+
+		if count == 0 {
+			return mcp.NewToolResultText(fmt.Sprintf("No consumers found for stream %s.", streamName)), nil
+		}
+
+		return mcp.NewToolResultText(sb.String()), nil
 	}
 }
