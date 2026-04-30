@@ -1,0 +1,13 @@
+# Binaries
+/nats-mcp
+bin/
+
+# Dependencies
+vendor/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
