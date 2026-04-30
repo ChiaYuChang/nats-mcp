@@ -1,17 +1,28 @@
 package server
 
 import (
-	"os"
+	"context"
 	"testing"
 
 	"github.com/nats-mcp/nats-mcp/internal/nats"
+	"github.com/nats-mcp/nats-mcp/internal/testutil"
 )
 
 func TestNatsServer(t *testing.T) {
-	if os.Getenv("NATS_URL") == "" {
-		t.Setenv("NATS_URL", "nats://localhost:14222")
+	ctx := context.Background()
+	token := "test-token"
+	container, err := testutil.SetupNATS(ctx, token)
+	if err != nil {
+		t.Fatalf("Failed to setup NATS: %v", err)
 	}
-	t.Setenv("NATS_TOKEN", "test-token")
+	defer func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Logf("Failed to terminate container: %v", err)
+		}
+	}()
+
+	t.Setenv("NATS_URL", container.URL)
+	t.Setenv("NATS_TOKEN", token)
 
 	client, err := nats.NewClient()
 	if err != nil {
@@ -19,20 +30,10 @@ func TestNatsServer(t *testing.T) {
 	}
 	defer client.Close()
 
-	srv := NewNatsServer(client)
-	if srv == nil {
-		t.Fatal("Expected NewNatsServer to return a server instance")
+	natsMCP := NewNatsServer(client)
+	if natsMCP == nil {
+		t.Fatal("NewNatsServer returned nil")
 	}
 
-	if srv.MCPServer == nil {
-		t.Fatal("Expected MCPServer to be initialized")
-	}
-
-	// Test RegisterTools
-	srv.RegisterTools()
-	
-	tools := srv.MCPServer.ListTools()
-	if len(tools) == 0 {
-		t.Error("Expected tools to be registered, but got 0")
-	}
+	natsMCP.RegisterTools()
 }

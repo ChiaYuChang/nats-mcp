@@ -1,16 +1,28 @@
 package nats
 
 import (
-	"os"
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/nats-mcp/nats-mcp/internal/testutil"
 )
 
 func TestTokenAuth_Success(t *testing.T) {
-	t.Setenv("NATS_TOKEN", "test-token")
-	if os.Getenv("NATS_URL") == "" {
-		t.Setenv("NATS_URL", "nats://localhost:14222")
+	ctx := context.Background()
+	token := "test-token"
+	container, err := testutil.SetupNATS(ctx, token)
+	if err != nil {
+		t.Fatalf("Failed to setup NATS: %v", err)
 	}
+	defer func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Logf("Failed to terminate container: %v", err)
+		}
+	}()
+
+	t.Setenv("NATS_URL", container.URL)
+	t.Setenv("NATS_TOKEN", token)
 
 	client, err := NewClient()
 	if err != nil {
@@ -28,10 +40,20 @@ func TestTokenAuth_Success(t *testing.T) {
 }
 
 func TestTokenAuth_Failure(t *testing.T) {
-	t.Setenv("NATS_TOKEN", "wrong-token")
-	if os.Getenv("NATS_URL") == "" {
-		t.Setenv("NATS_URL", "nats://localhost:14222")
+	ctx := context.Background()
+	token := "test-token"
+	container, err := testutil.SetupNATS(ctx, token)
+	if err != nil {
+		t.Fatalf("Failed to setup NATS: %v", err)
 	}
+	defer func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Logf("Failed to terminate container: %v", err)
+		}
+	}()
+
+	t.Setenv("NATS_URL", container.URL)
+	t.Setenv("NATS_TOKEN", "wrong-token")
 
 	client, err := NewClient()
 	if err == nil {
@@ -45,15 +67,24 @@ func TestTokenAuth_Failure(t *testing.T) {
 }
 
 func TestNoAuth_Failure(t *testing.T) {
+	ctx := context.Background()
+	token := "test-token"
+	container, err := testutil.SetupNATS(ctx, token)
+	if err != nil {
+		t.Fatalf("Failed to setup NATS: %v", err)
+	}
+	defer func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Logf("Failed to terminate container: %v", err)
+		}
+	}()
+
+	t.Setenv("NATS_URL", container.URL)
 	// Clear all possible auth env vars
 	t.Setenv("NATS_TOKEN", "")
 	t.Setenv("NATS_USER", "")
 	t.Setenv("NATS_PASSWORD", "")
 	t.Setenv("NATS_CREDS", "")
-
-	if os.Getenv("NATS_URL") == "" {
-		t.Setenv("NATS_URL", "nats://localhost:14222")
-	}
 
 	client, err := NewClient()
 	if err == nil {

@@ -2,19 +2,29 @@ package handler
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/nats-mcp/nats-mcp/internal/nats"
+	"github.com/nats-mcp/nats-mcp/internal/testutil"
 )
 
 func TestKVHandlers(t *testing.T) {
-	if os.Getenv("NATS_URL") == "" {
-		t.Setenv("NATS_URL", "nats://localhost:14222")
+	ctx := context.Background()
+	token := "test-token"
+	container, err := testutil.SetupNATS(ctx, token)
+	if err != nil {
+		t.Fatalf("Failed to setup NATS: %v", err)
 	}
-	t.Setenv("NATS_TOKEN", "test-token")
+	defer func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Logf("Failed to terminate container: %v", err)
+		}
+	}()
+
+	t.Setenv("NATS_URL", container.URL)
+	t.Setenv("NATS_TOKEN", token)
 
 	client, err := nats.NewClient()
 	if err != nil {
@@ -22,7 +32,6 @@ func TestKVHandlers(t *testing.T) {
 	}
 	defer client.Close()
 
-	ctx := context.Background()
 	bucketName := "TEST_BUCKET"
 
 	t.Run("kv_create_bucket", func(t *testing.T) {
@@ -44,45 +53,48 @@ func TestKVHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("kv_put_and_get", func(t *testing.T) {
-		putHandler := kvPutHandler(client)
-		getHandler := kvGetHandler(client)
-		key := "foo"
-		val := "bar"
-
-		// Put
-		putReq := mcp.CallToolRequest{
+	t.Run("kv_put", func(t *testing.T) {
+		handler := kvPutHandler(client)
+		req := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
 				Name: "kv_put",
 				Arguments: map[string]interface{}{
 					"bucket": bucketName,
-					"key":    key,
-					"value":  val,
+					"key":    "test_key",
+					"value":  "test_value",
 				},
 			},
 		}
-		_, err := putHandler(ctx, putReq)
+		resp, err := handler(ctx, req)
 		if err != nil {
-			t.Fatalf("Put failed: %v", err)
+			t.Errorf("Unexpected error: %v", err)
 		}
+		if resp.IsError {
+			t.Errorf("Expected success, got error: %v", resp.Content)
+		}
+	})
 
-		// Get
-		getReq := mcp.CallToolRequest{
+	t.Run("kv_get", func(t *testing.T) {
+		handler := kvGetHandler(client)
+		req := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
 				Name: "kv_get",
 				Arguments: map[string]interface{}{
 					"bucket": bucketName,
-					"key":    key,
+					"key":    "test_key",
 				},
 			},
 		}
-		getResp, err := getHandler(ctx, getReq)
+		resp, err := handler(ctx, req)
 		if err != nil {
-			t.Fatalf("Get failed: %v", err)
+			t.Errorf("Unexpected error: %v", err)
 		}
-		text := getResp.Content[0].(mcp.TextContent).Text
-		if !strings.Contains(text, val) {
-			t.Errorf("Expected value %s in response, got: %s", val, text)
+		if resp.IsError {
+			t.Errorf("Expected success, got error: %v", resp.Content)
+		}
+		text := resp.Content[0].(mcp.TextContent).Text
+		if !strings.Contains(text, "test_value") {
+			t.Errorf("Expected value 'test_value' in response, got: %s", text)
 		}
 	})
 
@@ -92,6 +104,9 @@ func TestKVHandlers(t *testing.T) {
 		resp, err := handler(ctx, req)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
+		}
+		if resp.IsError {
+			t.Errorf("Expected success, got error: %v", resp.Content)
 		}
 		text := resp.Content[0].(mcp.TextContent).Text
 		if !strings.Contains(text, bucketName) {
@@ -106,7 +121,7 @@ func TestKVHandlers(t *testing.T) {
 				Name: "kv_delete_key",
 				Arguments: map[string]interface{}{
 					"bucket": bucketName,
-					"key":    "foo",
+					"key":    "test_key",
 				},
 			},
 		}

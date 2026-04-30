@@ -2,19 +2,29 @@ package handler
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/nats-mcp/nats-mcp/internal/nats"
+	"github.com/nats-mcp/nats-mcp/internal/testutil"
 )
 
 func TestJetStreamHandlers(t *testing.T) {
-	if os.Getenv("NATS_URL") == "" {
-		t.Setenv("NATS_URL", "nats://localhost:14222")
+	ctx := context.Background()
+	token := "test-token"
+	container, err := testutil.SetupNATS(ctx, token)
+	if err != nil {
+		t.Fatalf("Failed to setup NATS: %v", err)
 	}
-	t.Setenv("NATS_TOKEN", "test-token")
+	defer func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Logf("Failed to terminate container: %v", err)
+		}
+	}()
+
+	t.Setenv("NATS_URL", container.URL)
+	t.Setenv("NATS_TOKEN", token)
 
 	client, err := nats.NewClient()
 	if err != nil {
@@ -22,7 +32,6 @@ func TestJetStreamHandlers(t *testing.T) {
 	}
 	defer client.Close()
 
-	ctx := context.Background()
 	streamName := "TEST_STREAM"
 
 	t.Run("jetstream_create_stream", func(t *testing.T) {
