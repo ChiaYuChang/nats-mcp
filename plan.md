@@ -36,9 +36,9 @@ By providing AI models with the ability to interact with NATS, developers can us
 - [x] **kv_list_buckets**
 
 ### Phase 4: Developer Experience (DX)
-- [ ] **Connection configuration**: Support for `NATS_URL`, `NATS_USER`, `NATS_PASSWORD`, and `.creds` files.
-- [ ] **Setup scripts**: Automated scripts to add the server to `claude_desktop_config.json`.
-- [ ] **Detailed error reporting**: Format NATS errors into actionable feedback for the AI.
+- [x] **Connection configuration**: Support for `NATS_URL`, `NATS_USER`, `NATS_PASSWORD`, and `.creds` files.
+- [x] **Setup scripts**: Automated scripts to add the server to `claude_desktop_config.json`.
+- [x] **Detailed error reporting**: Format NATS errors into actionable feedback for the AI.
 
 ## Implementation Tasks
 1. [x] Project structure initialization.

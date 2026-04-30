@@ -2,11 +2,13 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
+	natsgo "github.com/nats-io/nats.go"
 	"github.com/nats-mcp/nats-mcp/internal/nats"
 )
 
@@ -57,6 +59,11 @@ func RegisterMessagingTools(s *mcpserver.MCPServer, natsClient *nats.Client) {
 
 		msg, err := natsClient.Conn.Request(subject, []byte(payload), timeout)
 		if err != nil {
+			if errors.Is(err, natsgo.ErrNoResponders) {
+				return mcp.NewToolResultError(fmt.Sprintf("NATS Request failed: %v. (Hint: Ensure a service is actively subscribed to '%s' and is responding.)", err, subject)), nil
+			} else if errors.Is(err, natsgo.ErrTimeout) {
+				return mcp.NewToolResultError(fmt.Sprintf("NATS Request timed out after %v. (Hint: The responder might be slow or offline.)", timeout)), nil
+			}
 			return mcp.NewToolResultError(fmt.Sprintf("NATS Request failed: %v", err)), nil
 		}
 

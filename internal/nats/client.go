@@ -38,6 +38,13 @@ func NewClient() (*Client, error) {
 	creds := os.Getenv("NATS_CREDS")
 	if creds != "" {
 		opts = append(opts, nats.UserCredentials(creds))
+	} else {
+		// Fallback to username and password
+		user := os.Getenv("NATS_USER")
+		pass := os.Getenv("NATS_PASSWORD")
+		if user != "" || pass != "" {
+			opts = append(opts, nats.UserInfo(user, pass))
+		}
 	}
 
 	nc, err := nats.Connect(url, opts...)
