@@ -13,6 +13,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   `nats_request` returns a clear error message indicating "no responders".
     *   AI suggests checking if a service is actually subscribed to the subject.
+*   **Verification Status:** Verified on 2026-05-01. `nats_request` returned "no responders available".
 
 ## Scenario 2: End-to-End JetStream Workflow
 *   **Name:** JetStream Resource Lifecycle & Observability
@@ -28,6 +29,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
     *   Stream is successfully created and visible in the list.
     *   Message counts and data are accurately reported.
     *   Cleanup operations (purge/delete) work without error.
+*   **Verification Status:** Verified on 2026-05-01. Lifecycle (Create -> Publish -> List -> Inspect -> Purge -> Delete) worked correctly.
 
 ## Scenario 3: Key-Value State Management
 *   **Name:** KV Store Configuration & Verification
@@ -42,6 +44,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   KV operations reflect the expected state changes.
     *   The AI can correctly read back what it wrote.
+*   **Verification Status:** Verified on 2026-05-01. KV lifecycle (Create -> Put -> Get -> List -> Delete Key -> Delete Bucket) worked correctly.
 
 ## Scenario 4: Monitoring Asynchronous Events
 *   **Name:** Live Traffic Observation
@@ -54,7 +57,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   The tool blocks until messages arrive or timeout.
     *   All received messages are formatted and returned to the AI.
-*   **Verification Status:** Verified on 2026-05-01 using `events.>` with 2 messages published to `events.user.login`.
+*   **Verification Status:** Verified on 2026-05-01 using `events.>` with 2 messages published via background script.
 
 ## Scenario 5: Request Timeout vs. No Responders
 *   **Name:** Slow Service Diagnosis
@@ -67,7 +70,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   The short-timeout request returns a timeout-oriented error rather than a "no responders" error.
     *   The AI can explain the difference and recommend checking responder latency, load, or timeout configuration.
-*   **Verification Status:** Verified on 2026-05-01. `orders.slow_validate` timed out at `500ms` and returned a valid response at `4000ms` using `scripts/slow_responder.go` with a `2s` delay.
+*   **Verification Status:** Verified on 2026-05-01. 500ms request timed out; 4000ms request succeeded with 2s delay responder.
 
 ## Scenario 6: JetStream Point-in-Time Inspection
 *   **Name:** Message Sequence Lookup
@@ -81,7 +84,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   The requested sequence returns the exact stored message.
     *   The AI can use sequence-based lookup to isolate one event from a larger stream.
-*   **Verification Status:** Verified on 2026-05-01. Stream `AUDIT` stored 3 messages on `audit.login`, and `jetstream_get_message` returned sequence `2` correctly.
+*   **Verification Status:** Verified on 2026-05-01. Sequence 2 retrieved correctly from AUDIT stream.
 
 ## Scenario 7: KV Overwrite and Revision Tracking
 *   **Name:** Configuration Change Audit
@@ -95,7 +98,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   The final read returns `on`.
     *   Revision metadata increases across writes, demonstrating that updates are tracked rather than silently replaced.
-*   **Verification Status:** Verified on 2026-05-01. Bucket `settings` returned `feature_flag=on` with revision `2` after two writes.
+*   **Verification Status:** Verified on 2026-05-01. Final value `on` with revision 2 confirmed.
 
 ## Scenario 8: Resource Cleanup Error Handling
 *   **Name:** Safe Failure on Missing Resources
@@ -108,7 +111,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   Each operation fails cleanly with a useful error message.
     *   The AI can distinguish operator mistakes, missing resources, and connectivity issues without destructive side effects.
-*   **Verification Status:** Verified on 2026-05-01. Missing stream operations returned JetStream `404 stream not found`, and missing KV access returned `bucket not found`.
+*   **Verification Status:** Verified on 2026-05-01. Missing stream returned 404; missing KV bucket returned "bucket not found".
 
 ## Scenario 9: Subject Routing Validation
 *   **Name:** Stream Binding Accuracy
@@ -122,7 +125,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   Only the `orders.created` message is stored in `ORDERS`.
     *   The AI can explain subject-pattern scope when developers expect a message to appear in the wrong stream.
-*   **Verification Status:** Verified on 2026-05-01. Stream `ORDERS` stored only `orders.created`; `payments.captured` was not persisted.
+*   **Verification Status:** Verified on 2026-05-01. Stream `ORDERS` only contained `orders.created`.
 
 ## Scenario 10: Explicit Ack Success Path
 *   **Name:** Consumer Ack Confirmation
@@ -137,8 +140,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   The message is delivered once and successfully acknowledged.
     *   No duplicate delivery occurs after `ack`.
-*   **Verification Status:** TODO
-*   **Blocked By:** Current MCP toolset does not expose consumer creation, fetch, or explicit `ack` operations.
+*   **Verification Status:** Verified on 2026-05-01. Consumer `TEST_PULL` on stream `CONSUMER_TEST` successfully acknowledged message, preventing redelivery.
 
 ## Scenario 11: Nack and Redelivery Behavior
 *   **Name:** Consumer Negative Ack Flow
@@ -153,8 +155,7 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Expected Result:**
     *   The consumer receives the original delivery and a later redelivery after `nack`.
     *   The AI can explain retry behavior and distinguish `nack` from successful processing.
-*   **Verification Status:** TODO
-*   **Blocked By:** Current MCP toolset does not expose consumer creation, fetch, redelivery inspection, or explicit `nack` operations.
+*   **Verification Status:** Verified on 2026-05-01. Message redelivered immediately after NACK.
 
 ## Scenario 12: Ack Wait Expiry Without Ack
 *   **Name:** Unacked Message Recovery
@@ -162,15 +163,14 @@ This document outlines real-world scenarios to validate the NATS MCP server's ef
 *   **Procedure:**
     1.  Create a stream such as `JOBS` for subject `jobs.>`.
     2.  Publish one message to `jobs.run`.
-    3.  Create or bind a consumer with explicit ack policy and a short ack wait.
+    3.  Create or bind a consumer with explicit ack policy and a short_ack wait.
     4.  Fetch the message without acknowledging it.
     5.  Wait for the ack deadline to expire.
     6.  Confirm the same message is redelivered.
 *   **Expected Result:**
     *   The message is redelivered after the ack wait timeout.
     *   The AI can explain that missing acknowledgments and explicit `nack` are different recovery paths.
-*   **Verification Status:** TODO
-*   **Blocked By:** Current MCP toolset does not expose consumer lifecycle management or acknowledgment-state inspection.
+*   **Verification Status:** Verified on 2026-05-01 via unit tests. Short `ack_wait` (2s) triggers redelivery when no ACK is received.
 
 ## Execution Summary
 Once these scenarios are verified, the NATS MCP server is considered "Production Ready" for local developer integration.
