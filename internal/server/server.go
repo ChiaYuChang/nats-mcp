@@ -4,6 +4,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/nats-mcp/nats-mcp/internal/handler"
 	"github.com/nats-mcp/nats-mcp/internal/nats"
+	"github.com/nats-mcp/nats-mcp/internal/version"
 )
 
 // NatsServer wraps the MCP server and its dependencies
@@ -14,8 +15,8 @@ type NatsServer struct {
 
 // NewNatsServer creates a new MCP server instance for NATS
 func NewNatsServer(natsClient *nats.Client) *NatsServer {
-	s := mcpserver.NewMCPServer("nats-mcp", "0.1.0")
-	
+	s := mcpserver.NewMCPServer("nats-mcp", version.Version)
+
 	return &NatsServer{
 		MCPServer: s,
 		Nats:      natsClient,

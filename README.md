@@ -32,6 +32,16 @@ chmod +x nats-mcp
 
 ## Configure an MCP client
 
+Check the installed version without connecting to NATS:
+
+~~~sh
+nats-mcp --version
+~~~
+
+Release binaries report their tag, such as `nats-mcp v0.1.0`. Local builds default to `nats-mcp dev`. The MCP initialization response uses the same version.
+
+Pushing a stable `vX.Y.Z` tag triggers release builds. Tags with leading zeros or suffixes are rejected. Each Linux/macOS and amd64/arm64 archive is extracted and its binary executed on a matching runner to verify that `--version` equals `nats-mcp <tag>`. All four checks must pass before publishing the release.
+
 Set `command` to the installed or downloaded binary's absolute path. Set `NATS_URL` to the address of your NATS server. The server defaults to `nats://localhost:14222`.
 
 ~~~json
