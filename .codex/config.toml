@@ -1,5 +1,0 @@
-[mcp_servers.nats-mcp]
-command = "/home/cychang/Documents/nats-mcp/bin/nats-mcp"
-
-[mcp_servers.nats-mcp.env]
-NATS_URL = "nats://localhost:14222"

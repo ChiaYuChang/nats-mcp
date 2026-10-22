@@ -1,6 +1,6 @@
 module github.com/nats-mcp/nats-mcp
 
-go 1.26.2
+go 1.27.3
 
 require (
 	github.com/mark3labs/mcp-go v0.50.0
