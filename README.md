@@ -30,6 +30,27 @@ tar -xzf nats-mcp-linux-amd64.tar.gz
 chmod +x nats-mcp
 ~~~
 
+### 3. Install with Nix
+
+~~~sh
+nix profile add github:ChiaYuChang/nats-mcp
+~~~
+
+Run without installing:
+
+~~~sh
+nix run github:ChiaYuChang/nats-mcp -- --version
+~~~
+
+From a local checkout:
+
+~~~sh
+nix build path:.
+./result/bin/nats-mcp --version
+~~~
+
+The Nix package downloads the fixed `v0.1.0` release binary for Linux or macOS on amd64 or arm64 and verifies its SHA-256 hash. Go is not required. `default.nix` defines the release version and platform hashes; update these together when packaging a new release. `flake.lock` pins nixpkgs 26.05, which supports all four platforms.
+
 ## Configure an MCP client
 
 Check the installed version without connecting to NATS:
